@@ -1,31 +1,5 @@
-/*
-	File:SoundflowerEngine.h
 
-	Version: 1.0.1, ma++ ingalls
-    
-	Copyright (c) 2004 Cycling '74
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
-*/
-
-#ifndef _SoundflowerENGINE_H
-#define _SoundflowerENGINE_H
+#pragma once
 
 #include <IOKit/audio/IOAudioEngine.h>
 #include "SoundflowerDevice.h"
@@ -60,26 +34,25 @@ class SoundflowerEngine : public IOAudioEngine
 	
 public:
 
-    virtual bool init(OSDictionary *properties);
-    virtual void free();
+    virtual bool init(OSDictionary *properties) override;
+    virtual void free() override;
+
+    void initLogTable();
     
-    virtual bool initHardware(IOService *provider);
+    virtual bool initHardware(IOService *provider) override;
     
     virtual bool createAudioStreams(IOAudioSampleRate *initialSampleRate);
 
-    virtual IOReturn performAudioEngineStart();
-    virtual IOReturn performAudioEngineStop();
+    virtual IOReturn performAudioEngineStart() override;
+    virtual IOReturn performAudioEngineStop() override;
     
-    virtual UInt32 getCurrentSampleFrame();
+    virtual UInt32 getCurrentSampleFrame() override;
     
-    virtual IOReturn performFormatChange(IOAudioStream *audioStream, const IOAudioStreamFormat *newFormat, const IOAudioSampleRate *newSampleRate);
+    virtual IOReturn performFormatChange(IOAudioStream *audioStream, const IOAudioStreamFormat *newFormat, const IOAudioSampleRate *newSampleRate) override;
 
-    virtual IOReturn clipOutputSamples(const void *mixBuf, void *sampleBuf, UInt32 firstSampleFrame, UInt32 numSampleFrames, const IOAudioStreamFormat *streamFormat, IOAudioStream *audioStream);
-    virtual IOReturn convertInputSamples(const void *sampleBuf, void *destBuf, UInt32 firstSampleFrame, UInt32 numSampleFrames, const IOAudioStreamFormat *streamFormat, IOAudioStream *audioStream);
+    virtual IOReturn clipOutputSamples(const void *mixBuf, void *sampleBuf, UInt32 firstSampleFrame, UInt32 numSampleFrames, const IOAudioStreamFormat *streamFormat, IOAudioStream *audioStream) override;
+    virtual IOReturn convertInputSamples(const void *sampleBuf, void *destBuf, UInt32 firstSampleFrame, UInt32 numSampleFrames, const IOAudioStreamFormat *streamFormat, IOAudioStream *audioStream) override;
     
     static void ourTimerFired(OSObject *target, IOTimerEventSource *sender);
     
 };
-
-
-#endif /* _SoundflowerENGINE_H */

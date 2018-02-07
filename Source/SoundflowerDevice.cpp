@@ -1,39 +1,3 @@
-/*
-  File:SoundflowerDevice.cpp
-
-	Version: 1.0.1, ma++ ingalls
-    
-	Copyright (c) 2004 Cycling '74
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
-*/
-
-/*
-    Soundflower is derived from Apple's 'PhantomAudioDriver'
-    sample code.  It uses the same timer mechanism to simulate a hardware
-    interrupt, with some additional code to compensate for the software
-    timer's inconsistencies.  
-    
-    Soundflower basically copies the mixbuffer and presents it to clients
-    as an input buffer, allowing applications to send audio one another.
-*/
-
 #include "SoundflowerDevice.h"
 #include "SoundflowerEngine.h"
 #include <IOKit/audio/IOAudioControl.h>
@@ -41,8 +5,6 @@
 #include <IOKit/audio/IOAudioToggleControl.h>
 #include <IOKit/audio/IOAudioDefines.h>
 #include <IOKit/IOLib.h>
-
-#define super IOAudioDevice
 
 OSDefineMetaClassAndStructors(SoundflowerDevice, IOAudioDevice)
 
@@ -56,33 +18,27 @@ const SInt32 SoundflowerDevice::kGainMax = 99;
 
 bool SoundflowerDevice::initHardware(IOService *provider)
 {
-    bool result = false;
-    
 	//IOLog("SoundflowerDevice[%p]::initHardware(%p)\n", this, provider);
     
-    if (!super::initHardware(provider))
-        goto Done;
+    if (!this->IOAudioDevice::initHardware(provider))
+        return false;
     
-    setDeviceName("Soundflower");
-    setDeviceShortName("Soundflower");
-    setManufacturerName("ma++ ingalls for Cycling '74");
+    this->setDeviceName("Soundflower");
+    this->setDeviceShortName("Soundflower");
+    this->setManufacturerName("ma++ ingalls for Cycling '74");
     
-    if (!createAudioEngines())
-        goto Done;
+    if (!this->createAudioEngines())
+        return false;
     
-    result = true;
-    
-Done:
-
-    return result;
+    return true;
 }
 
 
 bool SoundflowerDevice::createAudioEngines()
 {
-    OSArray*				audioEngineArray = OSDynamicCast(OSArray, getProperty(AUDIO_ENGINES_KEY));
-    OSCollectionIterator*	audioEngineIterator;
-    OSDictionary*			audioEngineDict;
+    OSArray* audioEngineArray = OSDynamicCast(OSArray, this->getProperty(AUDIO_ENGINES_KEY));
+    OSCollectionIterator* audioEngineIterator;
+    OSDictionary* audioEngineDict;
 	
     if (!audioEngineArray) {
         IOLog("SoundflowerDevice[%p]::createAudioEngine() - Error: no AudioEngine array in personality.\n", this);
@@ -96,7 +52,7 @@ bool SoundflowerDevice::createAudioEngines()
 	}
     
     while ((audioEngineDict = (OSDictionary*)audioEngineIterator->getNextObject())) {
-		SoundflowerEngine*	audioEngine = NULL;
+		SoundflowerEngine* audioEngine = NULL;
 		
         if (OSDynamicCast(OSDictionary, audioEngineDict) == NULL)
             continue;
@@ -108,8 +64,8 @@ bool SoundflowerDevice::createAudioEngines()
         if (!audioEngine->init(audioEngineDict))
 			continue;
 
-		initControls(audioEngine);
-        activateAudioEngine(audioEngine);	// increments refcount and manages the object
+		this->initControls(audioEngine);
+        this->activateAudioEngine(audioEngine);	// increments refcount and manages the object
         audioEngine->release();				// decrement refcount so object is released when the manager eventually releases it
     }
 	
@@ -132,8 +88,8 @@ bool SoundflowerDevice::initControls(SoundflowerEngine* audioEngine)
     IOAudioControl*	control = NULL;
     
     for (UInt32 channel=0; channel <= NUM_CHANS; channel++) {
-        mVolume[channel] = mGain[channel] = kVolumeMax;
-        mMuteOut[channel] = mMuteIn[channel] = false;
+        this->mVolume[channel] = this->mGain[channel] = SoundflowerDevice::kVolumeMax;
+        this->mMuteOut[channel] = this->mMuteIn[channel] = false;
     }
     
     const char *channelNameMap[NUM_CHANS+1] = {	kIOAudioControlChannelNameAll,
@@ -206,7 +162,7 @@ bool SoundflowerDevice::initControls(SoundflowerEngine* audioEngine)
 
 IOReturn SoundflowerDevice::volumeChangeHandler(IOService *target, IOAudioControl *volumeControl, SInt32 oldValue, SInt32 newValue)
 {
-    IOReturn			result = kIOReturnBadArgument;
+    IOReturn result = kIOReturnBadArgument;
     SoundflowerDevice*	audioDevice = (SoundflowerDevice *)target;
 	
     if (audioDevice)
@@ -225,7 +181,7 @@ IOReturn SoundflowerDevice::volumeChanged(IOAudioControl *volumeControl, SInt32 
 
 IOReturn SoundflowerDevice::outputMuteChangeHandler(IOService *target, IOAudioControl *muteControl, SInt32 oldValue, SInt32 newValue)
 {
-    IOReturn			result = kIOReturnBadArgument;
+    IOReturn result = kIOReturnBadArgument;
     SoundflowerDevice*	audioDevice = (SoundflowerDevice*)target;
 	
     if (audioDevice)
@@ -244,7 +200,7 @@ IOReturn SoundflowerDevice::outputMuteChanged(IOAudioControl *muteControl, SInt3
 
 IOReturn SoundflowerDevice::gainChangeHandler(IOService *target, IOAudioControl *gainControl, SInt32 oldValue, SInt32 newValue)
 {
-    IOReturn			result = kIOReturnBadArgument;
+    IOReturn result = kIOReturnBadArgument;
     SoundflowerDevice*	audioDevice = (SoundflowerDevice *)target;
 	
     if (audioDevice)
@@ -263,7 +219,7 @@ IOReturn SoundflowerDevice::gainChanged(IOAudioControl *gainControl, SInt32 oldV
 
 IOReturn SoundflowerDevice::inputMuteChangeHandler(IOService *target, IOAudioControl *muteControl, SInt32 oldValue, SInt32 newValue)
 {
-    IOReturn			result = kIOReturnBadArgument;
+    IOReturn result = kIOReturnBadArgument;
     SoundflowerDevice*	audioDevice = (SoundflowerDevice*)target;
 
     if (audioDevice)

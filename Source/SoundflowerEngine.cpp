@@ -1,29 +1,3 @@
-/*
-  File:SoundflowerEngine.cpp
-
-	Version: 1.0.1, ma++ ingalls
-    
-	Copyright (c) 2004 Cycling '74
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
-*/
-
 #include "SoundflowerEngine.h"
 #include <IOKit/audio/IOAudioControl.h>
 #include <IOKit/audio/IOAudioLevelControl.h>
@@ -38,10 +12,8 @@
 #define NUM_BLOCKS		32
 #define NUM_STREAMS		1
 
-#define super IOAudioEngine
 
 OSDefineMetaClassAndStructors(SoundflowerEngine, IOAudioEngine)
-
 
  
 bool SoundflowerEngine::init(OSDictionary *properties)
@@ -51,31 +23,40 @@ bool SoundflowerEngine::init(OSDictionary *properties)
     
 	//IOLog("SoundflowerEngine[%p]::init()\n", this);
 
-    if (!super::init(properties)) {
-        goto Done;
+    if (!this->IOAudioEngine::init(properties)) {
+        return false;
     }
     
-    // Do class-specific initialization here
-    // If no non-hardware initialization is needed, this function can be removed
+    this->initLogTable();
+
+    number = OSDynamicCast(OSNumber, getProperty(NUM_BLOCKS_KEY));
+    if (number) {
+        numBlocks = number->unsigned32BitValue();
+    } 
+	else {
+        numBlocks = NUM_BLOCKS;
+    }
     
-	/* The below clojure code creates the lookup table. You can run it in the
-	 online repl at http://try-clojure.org/, although it seems copy and 
-	 paste doesn't work. The easiest way to get running with clojure on your
-	 own machine is to install https://github.com/technomancy/leiningen
-	 and type "lien repl"
-	 
-	 (defn dB->scale [ind dB] [ind (float (Math/pow 10.0 (/ dB 10.0)))])
-	 (defn val->dB [min-dB v] (+ (/ (* (- min-dB) v) 99.0) min-dB))
-	 (doseq [[i v] (map-indexed dB->scale (map #(val->dB -40.0 %) (range 0 100)))] (println "\tlogTable[" i "] = " v ";"))
-	 
-	 To adjust the minimum volume, change the -40 (in dB) value in the last line and also the
-	 corresponding visual aid in SoundflowerDevice.cpp Do not change the number of volume points 
-	 without also changing the minVolume/minGain constants in SoundflowerDevice.cpp.
-	 
-	 Initially, I used -71 as the minimum volume, but in reality my setup seems to reach zero
-	 muchbefore -71. A floor of -40 seems to work *ok* for my setup.
-	 */
-	logTable[ 0 ] =  1.0E-4 ;
+    number = OSDynamicCast(OSNumber, getProperty(BLOCK_SIZE_KEY));
+    if (number) {
+        blockSize = number->unsigned32BitValue();
+    } 
+	else {
+        blockSize = BLOCK_SIZE;
+    }
+    
+    inputStream = outputStream = NULL;
+    duringHardwareInit = FALSE;
+	mLastValidSampleFrame = 0;
+    result = true;
+    
+Done:
+    return true;
+}
+
+void SoundflowerEngine::initLogTable()
+{
+    logTable[ 0 ] =  1.0E-4 ;
 	logTable[ 1 ] =  1.09749875E-4 ;
 	logTable[ 2 ] =  1.2045036E-4 ;
 	logTable[ 3 ] =  1.3219411E-4 ;
@@ -175,36 +156,11 @@ bool SoundflowerEngine::init(OSDictionary *properties)
 	logTable[ 97 ] =  0.83021754 ;
 	logTable[ 98 ] =  0.91116273 ;
 	logTable[ 99 ] =  1.0 ;
-	
-    number = OSDynamicCast(OSNumber, getProperty(NUM_BLOCKS_KEY));
-    if (number) {
-        numBlocks = number->unsigned32BitValue();
-    } 
-	else {
-        numBlocks = NUM_BLOCKS;
-    }
-    
-    number = OSDynamicCast(OSNumber, getProperty(BLOCK_SIZE_KEY));
-    if (number) {
-        blockSize = number->unsigned32BitValue();
-    } 
-	else {
-        blockSize = BLOCK_SIZE;
-    }
-    
-    inputStream = outputStream = NULL;
-    duringHardwareInit = FALSE;
-	mLastValidSampleFrame = 0;
-    result = true;
-    
-Done:
-    return result;
 }
 
 
 bool SoundflowerEngine::initHardware(IOService *provider)
 {
-    bool result = false;
     IOAudioSampleRate initialSampleRate;
     IOWorkLoop *wl;
     
@@ -212,8 +168,8 @@ bool SoundflowerEngine::initHardware(IOService *provider)
     
     duringHardwareInit = TRUE;
     
-    if (!super::initHardware(provider)) {
-        goto Done;
+    if (!this->IOAudioEngine::initHardware(provider)) {
+        return false;
     }
     
     initialSampleRate.whole = 0;
@@ -221,11 +177,11 @@ bool SoundflowerEngine::initHardware(IOService *provider)
 
     if (!createAudioStreams(&initialSampleRate)) {
 		IOLog("SoundflowerEngine::initHardware() failed\n");
-        goto Done;
+        return false;
     }
 	
     if (initialSampleRate.whole == 0) {
-        goto Done;
+        return false;
     }
     
     // calculate our timeout in nanosecs, taking care to keep 64bits
@@ -233,29 +189,27 @@ bool SoundflowerEngine::initHardware(IOService *provider)
     blockTimeoutNS *= 1000000000;
     blockTimeoutNS /= initialSampleRate.whole;
 
-	setSampleRate(&initialSampleRate);
+	this->setSampleRate(&initialSampleRate);
     
     // Set the number of sample frames in each buffer
-    setNumSampleFramesPerBuffer(blockSize * numBlocks);
+    this->setNumSampleFramesPerBuffer(blockSize * numBlocks);
     
-    wl = getWorkLoop();
+    wl = this->getWorkLoop();
     if (!wl) {
-        goto Done;
+        return false;
     }
     
     timerEventSource = IOTimerEventSource::timerEventSource(this, ourTimerFired);
     
     if (!timerEventSource) {
-        goto Done;
+        return false;
     }
     
     workLoop->addEventSource(timerEventSource);
         
-    result = true;
     
-Done:
     duringHardwareInit = FALSE;    
-    return result;
+    return true;
 }
 
  
@@ -462,7 +416,7 @@ void SoundflowerEngine::free()
         IOFree(mThruBuffer, mBufferSize);
         mThruBuffer = NULL;
     }
-    super::free();
+    this->IOAudioEngine::free();
 }
 
  
